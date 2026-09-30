@@ -1,0 +1,10 @@
+{
+  "name": "virtual-assistant-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node backend/index.js",
+    "build": "npm install --prefix backend",
+    "dev": "npm run dev --prefix backend"
+  }
+}
