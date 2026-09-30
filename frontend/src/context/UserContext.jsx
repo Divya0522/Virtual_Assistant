@@ -9,7 +9,7 @@ const UserContext = ({ children }) => {
   const [frontendImage, setFrontendImage] = useState(null);
   const [backendImage, setBackendImage] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
-  const serverUrl = "http://localhost:5000";
+  const serverUrl = "https://virtual-assistant-api-3cec.onrender.com";
 
   const handleCurrentUser = useCallback(async () => {
     try {
