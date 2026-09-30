@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="va-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D97A65" />
+      <stop offset="100%" stop-color="#B85E4B" />
+    </linearGradient>
+  </defs>
+  <!-- Background Squircle in Terracotta -->
+  <rect width="64" height="64" rx="16" fill="url(#va-bg)" />
+  <rect width="62" height="62" x="1" y="1" rx="15" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
+  
+  <!-- Outer Resonance Arc in White -->
+  <circle cx="32" cy="32" r="22" stroke="#FFFFFF" stroke-width="2" stroke-dasharray="9 5" opacity="0.45" />
+
+  <!-- Center Voice / Intelligence Waves in Crisp White -->
+  <rect x="17" y="27" width="4" height="10" rx="2" fill="#FFFFFF" opacity="0.85" />
+  <rect x="24" y="20" width="4" height="24" rx="2" fill="#FFFFFF" opacity="0.95" />
+  <circle cx="32" cy="32" r="4.5" fill="#FFFFFF" />
+  <rect x="36" y="20" width="4" height="24" rx="2" fill="#FFFFFF" opacity="0.95" />
+  <rect x="43" y="27" width="4" height="10" rx="2" fill="#FFFFFF" opacity="0.85" />
+</svg>
