@@ -1,7 +1,7 @@
 import axios from "axios";
 import moment from "moment";
 
-const geminiResponse = async (command, assistantName, username, recentHistory = []) => {
+const geminiResponse = async (command, assistantName, username, recentHistory = [], preferredLang = "en-US") => {
   const now = moment();
   const currentDateStr = now.format("dddd, MMMM D, YYYY");
   const currentTimeStr = now.format("h:mm A");
@@ -16,6 +16,7 @@ You speak and interact with natural human intelligence, warmth, elegance, and pr
 Current Real-Time Context:
 - Today's Date: ${currentDateStr}
 - Current Time: ${currentTimeStr}
+- User's Preferred Assistant Language: ${preferredLang}
 
 Recent Conversation History:
 ${historyContext}
@@ -26,36 +27,50 @@ CRITICAL INSTRUCTIONS:
 1. Direct, High-Quality Answers:
    - For general knowledge, science, coding, advice, or casual conversation: Provide a smart, articulate, engaging, and accurate answer (2-4 clear sentences, perfect for both reading and speaking).
    - Never give vague, lazy, or robotic responses like "Done", "I can help with that", or "Please ask me".
-   - If the user asks "do you know today date" or "what is today's date": IMMEDIATELY state the date ("Today is ${currentDateStr}.").
-   - If the user asks for time: State the current time ("The time is ${currentTimeStr}.").
+   - If the user asks "do you know today date" or "what is today's date": IMMEDIATELY state the date.
+   - If the user asks for time: State the current time.
    - If the user asks about previous topics using pronouns ("that", "it", "there", "him/her"): Use the Recent Conversation History to provide the exact context.
 
 2. Application Actions (Map accurately to "type" and clean "userInput"):
-   - "open mail" / "check email" -> type: "mail_open", userInput: "mail", response: "Opening your Gmail inbox for you."
-   - "open youtube channel [Name]" or "open [Name] channel" -> type: "youtube_channel_open", userInput: "[Clean Channel Name]", response: "Opening the [Name] channel on YouTube."
-   - "play [song/video]" or "search youtube for [query]" -> type: "youtube_play", userInput: "[search query]", response: "Playing [query] on YouTube for you."
-   - "open youtube" -> type: "youtube_play", userInput: "", response: "Opening YouTube for you."
-   - "open linkedin" -> type: "linkedin_open", userInput: "", response: "Opening LinkedIn for you."
-   - "search [person/topic] on linkedin" -> type: "linkedin_search", userInput: "[search query]", response: "Searching LinkedIn for [search query]."
-   - "open google and search [query]" -> type: "google_search", userInput: "[clean search query]", response: "Searching Google for [search query]."
-   - "open calculator" -> type: "calculator_open", userInput: "", response: "Opening calculator for you."
-   - "open whatsapp" -> type: "whatsapp_open", userInput: "", response: "Opening WhatsApp for you."
-   - "open github" -> type: "github_open", userInput: "", response: "Opening GitHub for you."
-   - "open instagram" -> type: "instagram_open", userInput: "", response: "Opening Instagram for you."
-   - "open spotify" / "play on spotify" -> type: "spotify_open", userInput: "[query]", response: "Opening Spotify for you."
-   - "weather in [city]" -> type: "weather_check", userInput: "[city]", response: "Checking current weather for [city]."
+   - "open mail" / "check email" -> type: "mail_open", userInput: "mail"
+   - "open youtube channel [Name]" or "open [Name] channel" -> type: "youtube_channel_open", userInput: "[Clean Channel Name]"
+   - "play [song/video]" or "search youtube for [query]" -> type: "youtube_play", userInput: "[search query]"
+   - "open youtube" -> type: "youtube_play", userInput: ""
+   - "open linkedin" -> type: "linkedin_open", userInput: ""
+   - "search [person/topic] on linkedin" -> type: "linkedin_search", userInput: "[search query]"
+   - "open google and search [query]" -> type: "google_search", userInput: "[clean search query]"
+   - "open calculator" -> type: "calculator_open", userInput: ""
+   - "open whatsapp" -> type: "whatsapp_open", userInput: ""
+   - "open github" -> type: "github_open", userInput: ""
+   - "open instagram" -> type: "instagram_open", userInput: ""
+   - "open spotify" / "play on spotify" -> type: "spotify_open", userInput: "[query]"
+   - "weather in [city]" -> type: "weather_check", userInput: "[city]"
 
-3. Multilingual Support:
-   - If the query is in Telugu (తెలుగు) or asks in Telugu: Respond in natural, polite Telugu with lang: "te-IN".
-   - If the query is in Hindi (हिंदी) or asks in Hindi: Respond in natural, polite Hindi with lang: "hi-IN".
-   - Otherwise respond in natural English with lang: "en-US".
+3. Strict Multilingual Support (Match User's Preferred Language):
+   - If preferredLang is "te-IN" OR the query is in Telugu (తెలుగు) or asks in Telugu:
+     Respond completely in natural, fluent, polite Telugu (తెలుగు లిపి) with lang: "te-IN".
+     Examples:
+     - Open YouTube: "యూట్యూబ్‌ని మీ కోసం తెరుస్తున్నాను."
+     - Weather: "[city] లో ప్రస్తుత వాతావరణ సమాచారాన్ని చూపిస్తున్నాను."
+     - Time: "ప్రస్తుతం సమయం ${currentTimeStr}."
+     - Date: "ఈరోజు తేదీ ${currentDateStr}."
+     - General answer: provide natural polite Telugu sentences.
+   - If preferredLang is "hi-IN" OR the query is in Hindi (हिंदी) or asks in Hindi:
+     Respond completely in natural, polite Hindi (हिंदी लिपि) with lang: "hi-IN".
+     Examples:
+     - Open YouTube: "आपके लिए यूट्यूब खोल रहा हूँ।"
+     - Time: "वर्तमान समय ${currentTimeStr} है।"
+   - If preferredLang is "en-US":
+     Respond in natural English with lang: "en-US".
+   - If preferredLang is "auto":
+     Detect the language from the user query.
 
 4. Output Format:
    Return ONLY a strict, valid JSON object without markdown fences, code blocks, or preamble:
 {
   "type": "<action_type>",
   "userInput": "<clean query or parameter>",
-  "response": "<articulate, natural response text>",
+  "response": "<articulate, natural response text in the selected language>",
   "lang": "<en-US | te-IN | hi-IN>"
 }`;
 
@@ -86,8 +101,8 @@ CRITICAL INSTRUCTIONS:
   }
 
   // Graceful multilingual fallback
-  const isTelugu = /[\u0C00-\u0C7F]/.test(command);
-  const isHindi = /[\u0900-\u097F]/.test(command);
+  const isTelugu = preferredLang === "te-IN" || /[\u0C00-\u0C7F]/.test(command);
+  const isHindi = preferredLang === "hi-IN" || /[\u0900-\u097F]/.test(command);
 
   let fallbackResponse = "I'm having trouble connecting right now, but I'm here to help.";
   let lang = "en-US";

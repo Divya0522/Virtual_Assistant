@@ -58,9 +58,14 @@ const UserContext = ({ children }) => {
     }
   };
 
-  const getGeminiResponse = async (command) => {
+  const getGeminiResponse = async (command, lang) => {
     try {
-      const result = await axios.post(`${serverUrl}/api/user/asktoassistant`, { command }, { withCredentials: true });
+      const activeLang = lang || localStorage.getItem('va_lang') || 'en-US';
+      const result = await axios.post(
+        `${serverUrl}/api/user/asktoassistant`,
+        { command, lang: activeLang },
+        { withCredentials: true }
+      );
       return result.data;
     } catch (error) {
       return null;

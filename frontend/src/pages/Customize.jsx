@@ -95,6 +95,7 @@ const Customize = () => {
       // Save local preferences
       localStorage.setItem('va_voice_gender', voiceGender);
       localStorage.setItem('va_lang', selectedLang);
+      window.dispatchEvent(new CustomEvent('va_lang_changed', { detail: selectedLang }));
       localStorage.setItem('va_voice_muted', String(isVoiceMuted));
 
       // Save to backend

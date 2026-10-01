@@ -49,7 +49,7 @@ export const updateAssistant = async (req, res) => {
 
 export const askToAssistant = async (req, res) => {
   try {
-    const { command } = req.body;
+    const { command, lang: clientLang } = req.body;
     if (!command || !command.trim()) {
       return res.status(400).json({ message: "Command is required" });
     }
@@ -63,7 +63,13 @@ export const askToAssistant = async (req, res) => {
     const assistantName = user.assistantName || "Assistant";
     const recentHistory = (user.history || []).slice(-5);
 
-    const result = await geminiResponse(command, assistantName, userName, recentHistory);
+    const result = await geminiResponse(
+      command,
+      assistantName,
+      userName,
+      recentHistory,
+      clientLang || "en-US"
+    );
     if (!result) {
       return res.status(502).json({ message: "Assistant service is currently unavailable." });
     }
@@ -87,10 +93,9 @@ export const askToAssistant = async (req, res) => {
     const type = parsed.type || "general";
     const userInput = parsed.userInput || command;
     let finalResponse = parsed.response || "Done";
-    const lang = parsed.lang || "en-US";
-
-    const isTelugu = lang === "te-IN" || /[\u0C00-\u0C7F]/.test(command);
-    const isHindi = lang === "hi-IN" || /[\u0900-\u097F]/.test(command);
+    const isTelugu = parsed.lang === "te-IN" || clientLang === "te-IN" || /[\u0C00-\u0C7F]/.test(command);
+    const isHindi = parsed.lang === "hi-IN" || clientLang === "hi-IN" || /[\u0900-\u097F]/.test(command);
+    const lang = isTelugu ? "te-IN" : isHindi ? "hi-IN" : parsed.lang || clientLang || "en-US";
 
     // Ensure real-time answers for date, time, and day
     switch (type) {

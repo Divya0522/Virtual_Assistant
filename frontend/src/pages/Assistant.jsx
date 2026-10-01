@@ -38,19 +38,61 @@ const Assistant = () => {
   const lastSpokenTimeRef = useRef(0);
   const speechTimeoutRef = useRef(null);
   const currentSpeechRef = useRef('');
+  const audioRef = useRef(null);
 
   useEffect(() => {
     isMicActiveRef.current = isMicActive;
   }, [isMicActive]);
 
-  // Sync mute setting from storage
+  // Cleanly stop any active speech (speechSynthesis or streaming audio)
+  const stopAllSpeech = useCallback(() => {
+    if (window.speechSynthesis) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.src = '';
+      } catch (e) {}
+      audioRef.current = null;
+    }
+    isSpeakingRef.current = false;
+  }, []);
+
+  // Preload browser voices for Chromium
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.getVoices();
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+      };
+    }
+  }, []);
+
+  // Listen for language or stop events
+  useEffect(() => {
+    const handleStop = () => stopAllSpeech();
     const handleStorageChange = () => {
       setIsVoiceMuted(localStorage.getItem('va_voice_muted') === 'true');
     };
+    const handleLangChange = (e) => {
+      const newLang = e?.detail || localStorage.getItem('va_lang') || 'en-US';
+      if (recognitionRef.current) {
+        recognitionRef.current.lang = newLang === 'auto' ? 'en-US' : newLang;
+      }
+    };
+
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+    window.addEventListener('va_stop_speech', handleStop);
+    window.addEventListener('va_lang_changed', handleLangChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('va_stop_speech', handleStop);
+      window.removeEventListener('va_lang_changed', handleLangChange);
+      stopAllSpeech();
+    };
+  }, [stopAllSpeech]);
 
   // Auto-scroll chat to latest message
   useEffect(() => {
@@ -275,13 +317,96 @@ const Assistant = () => {
     return null;
   }, []);
 
+  // High-fidelity streaming audio fallback for languages lacking OS voices (like Telugu on desktop)
+  const playAudioStreamFallback = useCallback((fullText, langCode, onComplete) => {
+    const cleanText = (fullText || '')
+      .replace(/[*_#`~[\]()]/g, '')
+      .replace(/https?:\/\/\S+/g, '')
+      .trim();
+
+    if (!cleanText) {
+      onComplete();
+      return;
+    }
+
+    const shortLang = (langCode || 'te').split('-')[0].toLowerCase();
+
+    // Divide text into smooth chunks (<= 160 chars) compatible with TTS streaming
+    const sentences = cleanText.match(/[^.!?\n]+[.!?\n]+|[^.!?\n]+$/g) || [cleanText];
+    const chunks = [];
+    let temp = '';
+
+    for (const s of sentences) {
+      const trimmed = s.trim();
+      if (!trimmed) continue;
+      if ((temp + ' ' + trimmed).length <= 160) {
+        temp = temp ? temp + ' ' + trimmed : trimmed;
+      } else {
+        if (temp) chunks.push(temp);
+        if (trimmed.length > 160) {
+          const words = trimmed.split(' ');
+          let sub = '';
+          for (const w of words) {
+            if ((sub + ' ' + w).length <= 160) {
+              sub = sub ? sub + ' ' + w : w;
+            } else {
+              if (sub) chunks.push(sub);
+              sub = w;
+            }
+          }
+          if (sub) chunks.push(sub);
+          temp = '';
+        } else {
+          temp = trimmed;
+        }
+      }
+    }
+    if (temp) chunks.push(temp);
+
+    if (chunks.length === 0) {
+      onComplete();
+      return;
+    }
+
+    let idx = 0;
+    const playNextChunk = () => {
+      if (idx >= chunks.length || !isSpeakingRef.current) {
+        onComplete();
+        return;
+      }
+
+      const currentChunk = chunks[idx];
+      idx++;
+
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(shortLang)}&q=${encodeURIComponent(currentChunk)}`;
+      const audio = new Audio(url);
+      audioRef.current = audio;
+
+      audio.onended = () => {
+        playNextChunk();
+      };
+
+      audio.onerror = () => {
+        console.warn('TTS chunk audio stream error, proceeding to next');
+        playNextChunk();
+      };
+
+      audio.play().catch((err) => {
+        console.warn('Audio playback prevented or failed:', err);
+        onComplete();
+      });
+    };
+
+    playNextChunk();
+  }, []);
+
   // Text-To-Speech (TTS) Voice Engine
   const speak = useCallback((text, targetLang) => {
     const selectedGender = localStorage.getItem('va_voice_gender') || 'female';
     const activeLang = targetLang || localStorage.getItem('va_lang') || 'en-US';
     const muted = localStorage.getItem('va_voice_muted') === 'true';
 
-    if (!window.speechSynthesis || !text || muted) {
+    if (!text || muted) {
       isProcessingRef.current = false;
       isSpeakingRef.current = false;
       if (isMicActiveRef.current && recognitionRef.current) {
@@ -295,13 +420,10 @@ const Assistant = () => {
       try { recognitionRef.current.abort(); } catch (e) {}
     }
 
-    window.speechSynthesis.cancel();
+    stopAllSpeech();
     isSpeakingRef.current = true;
     lastSpokenTextRef.current = text.toLowerCase().trim();
     setStatus('speaking');
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    const voices = window.speechSynthesis.getVoices();
 
     let langCode = activeLang;
     if (activeLang === 'auto' || !langCode) {
@@ -310,11 +432,34 @@ const Assistant = () => {
       else langCode = 'en-US';
     }
 
-    utterance.lang = langCode;
+    const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
     const langPrefix = langCode.split('-')[0].toLowerCase();
     const matchingVoices = voices.filter((v) => v.lang.toLowerCase().startsWith(langPrefix));
 
-    if (matchingVoices.length > 0) {
+    const onFinish = () => {
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+          audioRef.current.src = '';
+        } catch (e) {}
+        audioRef.current = null;
+      }
+      lastSpokenTimeRef.current = Date.now();
+      setTimeout(() => {
+        isSpeakingRef.current = false;
+        isProcessingRef.current = false;
+        if (isMicActiveRef.current && recognitionRef.current) {
+          try { recognitionRef.current.start(); } catch (e) {}
+        }
+        setStatus(isMicActiveRef.current ? 'listening' : 'idle');
+      }, 700);
+    };
+
+    // If the browser has a matching local or web speech voice (e.g. English, or Hindi in Chrome)
+    if (matchingVoices.length > 0 && window.speechSynthesis) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = langCode;
+
       let matchedVoice = null;
       if (selectedGender === 'female') {
         matchedVoice = matchingVoices.find((v) =>
@@ -330,30 +475,24 @@ const Assistant = () => {
         utterance.rate = 0.96;
       }
       if (matchedVoice) utterance.voice = matchedVoice;
-    }
 
-    const onFinish = () => {
-      lastSpokenTimeRef.current = Date.now();
+      utterance.onend = onFinish;
+      utterance.onerror = () => {
+        // Fallback to streaming audio if native speech synthesis fails
+        playAudioStreamFallback(text, langCode, onFinish);
+      };
+
+      const safetyTimeout = Math.max(3000, (text.length / 10) * 1000 + 2000);
       setTimeout(() => {
-        isSpeakingRef.current = false;
-        isProcessingRef.current = false;
-        if (isMicActiveRef.current && recognitionRef.current) {
-          try { recognitionRef.current.start(); } catch (e) {}
-        }
-        setStatus(isMicActiveRef.current ? 'listening' : 'idle');
-      }, 700);
-    };
+        if (isSpeakingRef.current && !audioRef.current) onFinish();
+      }, safetyTimeout);
 
-    utterance.onend = onFinish;
-    utterance.onerror = onFinish;
-
-    const safetyTimeout = Math.max(3000, (text.length / 10) * 1000 + 2000);
-    setTimeout(() => {
-      if (isSpeakingRef.current) onFinish();
-    }, safetyTimeout);
-
-    window.speechSynthesis.speak(utterance);
-  }, []);
+      window.speechSynthesis.speak(utterance);
+    } else {
+      // Audio stream fallback for languages without native desktop voices (e.g. Telugu)
+      playAudioStreamFallback(text, langCode, onFinish);
+    }
+  }, [stopAllSpeech, playAudioStreamFallback]);
 
   // Process text or spoken query
   const processCommand = useCallback(async (commandText) => {
@@ -381,7 +520,8 @@ const Assistant = () => {
     setStatus('thinking');
 
     try {
-      const data = await getGeminiResponse(trimmed);
+      const activeLang = localStorage.getItem('va_lang') || 'en-US';
+      const data = await getGeminiResponse(trimmed, activeLang);
       if (data) {
         const reply = data.response || 'Task completed.';
         const action = resolveAction(data);
@@ -396,13 +536,21 @@ const Assistant = () => {
           }
         ]);
 
-        speak(reply, data.lang);
+        speak(reply, data.lang || activeLang);
         if (action?.url) {
           openTargetUrl(action.url);
         }
         fetchHistory();
       } else {
-        const fallback = 'I was unable to process that request. Please try again.';
+        const activeLang = localStorage.getItem('va_lang') || 'en-US';
+        const isTe = activeLang === 'te-IN' || /[\u0C00-\u0C7F]/.test(trimmed);
+        const isHi = activeLang === 'hi-IN' || /[\u0900-\u097F]/.test(trimmed);
+        const fallback = isTe
+          ? 'క్షమించండి, మీ అభ్యర్థనను పూర్తి చేయలేకపోయాను. దయచేసి మళ్లీ ప్రయత్నించండి.'
+          : isHi
+          ? 'क्षमा करें, मैं आपका अनुरोध पूरा नहीं कर सका। कृपया पुनः प्रयास करें।'
+          : 'I was unable to process that request. Please try again.';
+
         setChatMessages((prev) => [
           ...prev,
           {
@@ -411,11 +559,16 @@ const Assistant = () => {
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           }
         ]);
-        speak(fallback);
+        speak(fallback, activeLang);
       }
     } catch (err) {
-      const fallback = 'An error occurred while connecting to the assistant.';
-      speak(fallback);
+      const activeLang = localStorage.getItem('va_lang') || 'en-US';
+      const fallback = activeLang === 'te-IN'
+        ? 'కనెక్ట్ చేయడంలో సమస్య ఏర్పడింది, దయచేసి మళ్లీ ప్రయత్నించండి.'
+        : activeLang === 'hi-IN'
+        ? 'कनेक्ट करने में समस्या आई, कृपया पुनः प्रयास करें।'
+        : 'An error occurred while connecting to the assistant.';
+      speak(fallback, activeLang);
     }
   }, [getGeminiResponse, speak, resolveAction, openTargetUrl, fetchHistory]);
 
@@ -499,6 +652,7 @@ const Assistant = () => {
 
   // Toggle Microphone
   const toggleMic = () => {
+    stopAllSpeech();
     if (isMicActive) {
       setIsMicActive(false);
       isMicActiveRef.current = false;
@@ -511,6 +665,10 @@ const Assistant = () => {
     } else {
       setIsMicActive(true);
       isMicActiveRef.current = true;
+      const currentLang = localStorage.getItem('va_lang') || 'en-US';
+      if (recognitionRef.current) {
+        recognitionRef.current.lang = currentLang === 'auto' ? 'en-US' : currentLang;
+      }
       if (!isSpeakingRef.current && !isProcessingRef.current && recognitionRef.current) {
         try { recognitionRef.current.start(); } catch (e) {}
       }
@@ -522,6 +680,7 @@ const Assistant = () => {
   const handleChatSubmit = (e) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
+    stopAllSpeech();
     const text = chatInput.trim();
     setChatInput('');
     processCommand(text);
@@ -563,6 +722,7 @@ const Assistant = () => {
               type="button"
               onClick={() => {
                 const next = !isVoiceMuted;
+                if (next) stopAllSpeech();
                 setIsVoiceMuted(next);
                 localStorage.setItem('va_voice_muted', String(next));
               }}

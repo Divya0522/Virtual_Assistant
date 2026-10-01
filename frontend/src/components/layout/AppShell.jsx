@@ -42,6 +42,7 @@ const AppShell = ({ children, assistantStatus = 'idle' }) => {
 
   useEffect(() => {
     localStorage.setItem('va_lang', selectedLang);
+    window.dispatchEvent(new CustomEvent('va_lang_changed', { detail: selectedLang }));
   }, [selectedLang]);
 
   useEffect(() => {
