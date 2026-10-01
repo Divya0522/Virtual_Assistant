@@ -22,6 +22,7 @@ const Card = ({ image }) => {
       <img
         src={image}
         alt="Assistant Persona"
+        onError={(e) => { e.currentTarget.style.display = 'none'; }}
         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 select-none pointer-events-none"
       />
 

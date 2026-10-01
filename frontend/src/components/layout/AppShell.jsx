@@ -19,6 +19,7 @@ import {
   FiCheck
 } from 'react-icons/fi';
 import aiGif from '../../assets/ai.gif';
+import { resolveAvatar } from '../../utils/avatarHelper';
 
 const AppShell = ({ children, assistantStatus = 'idle' }) => {
   const { userData, handleLogout, fetchHistory } = useContext(userDataContext);
@@ -85,7 +86,7 @@ const AppShell = ({ children, assistantStatus = 'idle' }) => {
     navigate('/signin');
   };
 
-  const currentAvatar = userData?.assistantImage || aiGif;
+  const currentAvatar = resolveAvatar(userData?.assistantImage);
   const assistantName = userData?.assistantName || 'Assistant';
   const langDisplay = selectedLang === 'te-IN' ? 'Telugu' : selectedLang === 'hi-IN' ? 'Hindi' : 'English';
   const langLabel = langDisplay;
@@ -186,7 +187,12 @@ const AppShell = ({ children, assistantStatus = 'idle' }) => {
             <div className="pt-4 border-t border-[#E7E3DC] space-y-3">
               <div className="flex items-center gap-3 px-1 py-1">
                 <div className="w-10 h-10 rounded-xl overflow-hidden bg-[#F7F5F0] border border-[#E7E3DC] shrink-0">
-                  <img src={currentAvatar} alt={assistantName} className="w-full h-full object-cover" />
+                  <img
+                    src={currentAvatar}
+                    alt={assistantName}
+                    onError={(e) => { e.currentTarget.src = aiGif; }}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-[#252525] truncate">{userData?.name || 'User'}</p>
@@ -255,7 +261,12 @@ const AppShell = ({ children, assistantStatus = 'idle' }) => {
           {/* Assistant Info Widget */}
           <div className="p-3 rounded-2xl bg-[#FAF8F5] border border-[#E7E3DC] flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl overflow-hidden bg-white border border-[#E7E3DC] shrink-0 shadow-2xs">
-              <img src={currentAvatar} alt={assistantName} className="w-full h-full object-cover" />
+              <img
+                src={currentAvatar}
+                alt={assistantName}
+                onError={(e) => { e.currentTarget.src = aiGif; }}
+                className="w-full h-full object-cover"
+              />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">

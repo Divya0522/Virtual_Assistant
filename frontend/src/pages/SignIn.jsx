@@ -35,6 +35,10 @@ const SignIn = () => {
         { withCredentials: true }
       );
 
+      if (result.data?.token) {
+        localStorage.setItem('va_token', result.data.token);
+      }
+
       setUserData(result.data);
       setLoading(false);
       toast.success('Signed in successfully');

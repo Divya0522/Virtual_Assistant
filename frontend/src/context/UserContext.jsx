@@ -1,6 +1,19 @@
 import { createContext, useEffect, useState, useCallback } from 'react';
 import axios from "axios";
 
+// Ensure outgoing requests include Bearer token across domains
+axios.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('va_token');
+    if (token) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 export const userDataContext = createContext();
 
 const UserContext = ({ children }) => {
@@ -9,7 +22,7 @@ const UserContext = ({ children }) => {
   const [frontendImage, setFrontendImage] = useState(null);
   const [backendImage, setBackendImage] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
-  const serverUrl = "https://virtual-assistant-api-3cec.onrender.com";
+  const serverUrl = import.meta.env.VITE_SERVER_URL || "https://virtual-assistant-api-3cec.onrender.com";
 
   const handleCurrentUser = useCallback(async () => {
     try {
@@ -17,6 +30,9 @@ const UserContext = ({ children }) => {
       setUserData(result.data);
       return result.data;
     } catch (error) {
+      if (error?.response?.status === 401) {
+        localStorage.removeItem('va_token');
+      }
       setUserData(null);
       return null;
     } finally {
@@ -34,6 +50,7 @@ const UserContext = ({ children }) => {
     } catch (error) {
       console.error("Logout error:", error);
     } finally {
+      localStorage.removeItem('va_token');
       setUserData(null);
       setFrontendImage(null);
       setBackendImage(null);

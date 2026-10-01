@@ -16,6 +16,7 @@ import image5 from '../assets/image5.png';
 import image6 from '../assets/image6.jpeg';
 import image7 from '../assets/image7.jpeg';
 import aiGif from '../assets/ai.gif';
+import { resolveAvatar } from '../utils/avatarHelper';
 import {
   FiCheck,
   FiUploadCloud,
@@ -55,7 +56,7 @@ const Customize = () => {
   useEffect(() => {
     if (!selectedImage) {
       if (userData?.assistantImage) {
-        setSelectedImage(userData.assistantImage);
+        setSelectedImage(resolveAvatar(userData.assistantImage));
       } else {
         setSelectedImage(image1);
       }
@@ -80,7 +81,9 @@ const Customize = () => {
 
   const previewAvatarSrc =
     frontendImage ||
-    (selectedImage && selectedImage !== 'input' ? selectedImage : userData?.assistantImage || image1);
+    (selectedImage && selectedImage !== 'input'
+      ? resolveAvatar(selectedImage)
+      : resolveAvatar(userData?.assistantImage) || image1);
 
   const handleSaveAll = async (e) => {
     if (e) e.preventDefault();
@@ -420,6 +423,7 @@ const Customize = () => {
                   <img
                     src={previewAvatarSrc}
                     alt="Assistant Avatar Preview"
+                    onError={(e) => { e.currentTarget.src = aiGif; }}
                     className="w-full h-full object-cover select-none pointer-events-none"
                   />
                 </div>

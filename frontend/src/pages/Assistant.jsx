@@ -6,6 +6,7 @@ import Badge from '../components/ui/Badge';
 import EmptyState from '../components/ui/EmptyState';
 import aiGif from '../assets/ai.gif';
 import userGif from '../assets/user.gif';
+import { resolveAvatar } from '../utils/avatarHelper';
 import {
   FiMic,
   FiMicOff,
@@ -531,7 +532,7 @@ const Assistant = () => {
       ? userGif
       : status === 'thinking' || status === 'speaking'
       ? aiGif
-      : userData?.assistantImage || aiGif;
+      : resolveAvatar(userData?.assistantImage);
 
   const assistantName = userData?.assistantName || 'Assistant';
 
@@ -594,6 +595,7 @@ const Assistant = () => {
                 <img
                   src={currentAvatarSrc}
                   alt={assistantName}
+                  onError={(e) => { e.currentTarget.src = aiGif; }}
                   className="w-full h-full object-cover select-none pointer-events-none"
                 />
               </div>
